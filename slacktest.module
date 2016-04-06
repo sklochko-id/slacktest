@@ -1,0 +1,110 @@
+<?php
+
+/**
+ * @file
+ * slacktest.module
+ */
+
+/**
+ * Implements hook_menu().
+ */
+function slacktest_menu() {
+  $items = array();
+  $items['slacktest'] = array(
+    'title' => 'List of last 10 messages of a channel',
+    'page callback' => 'slacktest_page',
+    'access arguments' => array('access content'),
+  );
+  $items['admin/config/services/slacktest'] = array(
+    'title' => 'Slacktest',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('slacktest_admin_settings'),
+    'access arguments' => array('access administration pages'),
+    'file' => 'slacktest.admin.inc',
+  );
+  return $items;
+}
+
+/**
+ * Returns list of last 10 messages of a channel.
+ */
+function slacktest_page() {
+  $endpoint = variable_get('slacktest_endpoint', '');
+  $token = variable_get('slacktest_token', '');
+  $channel = variable_get('slacktest_channel', '');
+  if (empty($endpoint) || empty($token) || empty($channel)) {
+    drupal_set_message(t('Please configure slacktest module'), 'warning');
+  }
+
+  $method = 'channels.history';
+  $data = array(
+    'channel' => $channel,
+    'token' => $token,
+    'count' => 10,
+  );
+  $url = url($endpoint . '/' . $method, array('query' => $data));
+
+  $content = '';
+  $response = drupal_http_request($url);
+  if ($response->code == 200) {
+    $slack_data = drupal_json_decode($response->data);
+    if (!empty($slack_data['ok']) && $slack_data['ok']) {
+      $messages = $slack_data['messages'];
+      usort($messages, "slacktest_message_ts");
+
+      // Allow other modules to modify messages.
+      drupal_alter('slacktest_messages', $messages);
+
+      $content = theme('slacktest_messages', array('messages' => $messages));
+    }
+  }
+  else {
+    drupal_set_message(t('Slack API cannot be reached, please configure it properly !link.', array('!link' => l(t('(link)'), 'admin/config/services/slacktest'))), 'error');
+  }
+  return $content;
+}
+
+/**
+ * Comparison callback.
+ */
+function slacktest_message_ts($a, $b) {
+  return strcmp($a['ts'], $b['ts']);
+}
+
+/**
+ * Returns HTML for a slacktest_messages.
+ */
+function theme_slacktest_messages($variables) {
+  $items = array();
+  foreach ($variables['messages'] as $message) {
+    $item = $message['type'] . ' | ' . $message['user'] . ' | ' . $message['ts'] . ' | ' . $message['text'];
+    if (!empty($message['edited'])) {
+      $item .= ' | ' . 'EDITED' . ' (' . $message['edited']['user'] . ', ' . $message['edited']['ts'] . ')';
+    }
+    $items[] = $item;
+  }
+  return theme('item_list', array('items' => $items));
+}
+
+/**
+ * Implements hook_theme().
+ */
+function slacktest_theme($existing, $type, $theme, $path) {
+  return array(
+    'slacktest_messages' => array(
+      'variables' => array('messages' => array()),
+    ),
+  );
+}
+
+/**
+ * Implements hook_slackset_message_alter().
+ *
+ * Example.
+ */
+function slacktest_slacktest_messages_alter(&$messages) {
+  $text_to_replace = 'desire';
+  foreach ($messages as &$message) {
+    $message = str_replace($text_to_replace, l($text_to_replace . ' (link)', 'slacktest'), $message);
+  }
+}

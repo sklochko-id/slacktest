@@ -1,0 +1,3 @@
+name = Slacktest
+description = Provide a page with list of last 10 messages of a channel
+core = 7.x

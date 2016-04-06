@@ -1,0 +1,15 @@
+<?php
+
+/**
+ * @file
+ * Slacktest installation routines.
+ */
+
+/**
+ * Implements hook_uninstall().
+ */
+function slacktest_uninstall() {
+  variable_del('slacktest_endpoint');
+  variable_del('slacktest_token');
+  variable_del('slacktest_channel');
+}
